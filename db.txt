@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS todos (
+    id INT AUTO_INCREMENT,
+    user_id INT,
+    date DATE,
+    task TEXT,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS user_states (
+    user_id INT,
+    state VARCHAR(255),
+    PRIMARY KEY (user_id)
+);
