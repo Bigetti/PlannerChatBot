@@ -1,0 +1,401 @@
+ 
+
+Модуль config.py
+В этом модуле будут храниться конфигурационные данные, такие как токен бота и список администраторов.
+
+ 
+# config.py
+
+TOKEN = '6136409665:AAFB7w_7Rhmek-mlTAb_ssNWjh5vlMjmPbI'
+ADMIN_LIST = [1588197954]  # Замените на реальные ID администраторов
+
+
+
+
+Модуль utils.py
+В этом модуле будут храниться вспомогательные функции, такие как загрузка и сохранение задач, проверка формата даты и другие.
+
+ 
+# utils.py
+
+import json
+from datetime import datetime
+
+def load_todos():
+    try:
+        with open('todos.json', 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        return data
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        print("Не удалось декодировать файл 'todos.json'")
+        return {}
+
+def save_todos(todos):
+    with open('todos.json', 'w', encoding='utf-8') as file:
+        json.dump(todos, file, ensure_ascii=False, indent=4)
+
+def is_valid_date_format(date_string):
+    try:
+        datetime.strptime(date_string, '%d.%m.%y')
+        return True
+    except ValueError:
+        return False
+
+def add_todo(user_id, date, task):
+    todos = load_todos()
+    if user_id not in todos:
+        todos[user_id] = {}
+    date = date.replace('/', '.')
+    date = date.lower()
+    if date == 'сегодня':
+        today = datetime.now().strftime('%d.%m.%y')
+        date = today
+    if is_valid_date_format(date):
+        if date not in todos[user_id]:
+            todos[user_id][date] = []
+        if task not in todos[user_id][date]:
+            todos[user_id][date].append(task)
+            save_todos(todos)
+        else:
+            return f"Задача '{task}' уже существует на дате {date}."
+    else:
+        return f"Некорректный формат даты: {date}"
+
+def clear_tasks():
+    todos = load_todos()
+    todos.clear()
+    save_todos(todos)
+    return "Задачи очищены"
+
+
+
+
+# main.py
+
+import telebot
+from telebot import types
+from config import TOKEN
+from handlers import *
+
+bot = telebot.TeleBot(TOKEN)
+
+keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+
+start_button = types.KeyboardButton('/start')
+help_button = types.KeyboardButton('/help')
+add_button = types.KeyboardButton('/add')
+random_button = types.KeyboardButton('/random')
+show_button = types.KeyboardButton('/show')
+restart_button = types.KeyboardButton('/restart')
+clear_tasks_button = types.KeyboardButton('/clear_tasks')
+exit_button = types.KeyboardButton('/exitsave')
+
+keyboard.add(start_button, help_button)
+keyboard.add(add_button, random_button)
+keyboard.add(show_button, restart_button)
+keyboard.add(clear_tasks_button, exit_button)
+
+user_states = {}
+
+STATE_NONE = 'none'
+STATE_ADD_TASK = 'add_task'
+STATE_SHOW_TASKS = 'show_tasks'
+
+def set_state(user_id, state):
+    if user_id not in user_states:
+        user_states[user_id] = {}
+    user_states[user_id]['state'] = state
+
+def get_user_state(user_id):
+    return user_states.get(user_id, {}).get('state', STATE_NONE)
+
+def reset_state(user_id):
+    if user_id in user_states:
+        user_states[user_id] = {}
+
+if __name__ == "__main__":
+    bot.polling(none_stop=True)
+
+
+
+
+# handlers.py
+
+from random import choice
+import atexit
+from main import bot, keyboard, user_states, set_state, get_user_state, reset_state, STATE_NONE, STATE_ADD_TASK, STATE_SHOW_TASKS
+from config import ADMIN_LIST
+from utils import load_todos, save_todos, add_todo, clear_tasks, is_valid_date_format
+
+RANDOM_TASKS = ['Позаниматься спортом, гирькой турничек', 'Кодить на  Python', 'Поучить сетевой Курс по Зуксель', 'Посмотреть Какой-то сериальчик', 'Поготовить\Вкусно поесть' , 'Прогуляться пешком или на велике']
+
+@bot.message_handler(commands=['help'])
+def show_help(message):
+    help_message = '''
+Правила ввода задач:
+1. Для добавления задачи на определенную дату используйте команду: /add дата задачи
+   (команду можно кнопкой)   Пример: /add 31.12.22
+   Потом Вас попросят написать саму задачу текстом, например: Сделать домашнее задание
+
+2. Для удаления задачи на определенной дате используйте команду: /delete дата задача
+   Пример: /delete 31.12.22 Сделать домашнее задание (Функция  в разработе)
+
+3. Для баловства или если вы не знаете чем заняться сегодня можете выбрать команду /random
+   И бот придумает для Вас задачу из имеющихся (Надо проработать возможность дополнять такой список)
+
+4. Для просмотра задач на определенной дате используйте команду: /show 12.02.21
+   Также вы можете набрать "все" - если хотите просмотреть задачи на все даты
+   либо "сегодня" - соответственно на сегодня
+   либо написать название месяца (Эта чать функции show также пока в разработе)
+
+Формат даты: Дата должна быть в формате xx.xx.xx,  --  день.месяц.год.
+Пример правильного формата даты: 31.12.22
+Вы также можете нажать на кнопку с нужной командой и потом ввести дату и задачу
+'''
+    bot.send_message(message.from_user.id, help_message)
+
+@bot.message_handler(commands=['restart'])
+def restart_command(message):
+    user_id = str(message.from_user.id)
+    reset_state(user_id)
+    bot.send_message(user_id, "Бот был перезапущен. Выберите действие:", reply_markup=keyboard)
+
+@bot.message_handler(commands=['start'])
+def handle_start(message):
+    todos = load_todos()
+    user_id = str(message.from_user.id)
+    if user_id in todos:
+        bot.reply_to(message, f"Привет, {message.from_user.first_name}!")
+        bot.send_message(user_id, "Можешь добавить задачу в планнер на нужную дату или рандомную на сегодня получить ))  или вывести уже имеющиеся на какую-то дату или за месяц или все сразу:", reply_markup=keyboard)
+        reset_state(message)
+    else:
+        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+        markup.add('Да', 'Нет')
+        msg = bot.reply_to(message, "Вас нет в списке доступа к данному чату. Хотите отправить запрос администратору?", reply_markup=markup)
+        bot.register_next_step_handler(msg, process_access_request, user_id)
+
+def process_access_request(message, user_id):
+    if message.text.lower() == 'да':
+        for admin_id in ADMIN_LIST:
+            bot.send_message(admin_id, f"Пользователь {message.from_user.first_name} с ID {user_id} хочет присоединиться к чату. Отправить запрос?", reply_markup=types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True).add('Да', 'Нет'))
+        bot.reply_to(message, "Ваш запрос отправлен администратору. Ожидайте ответа.")
+    else:
+        bot.reply_to(message, "Обращайтесь еще.")
+
+@bot.message_handler(func=lambda message: message.text.lower() in ['да', 'нет'])
+def process_admin_response(message):
+    if message.text.lower() == 'да':
+        add_access(message.chat.id)
+        bot.send_message(message.chat.id, f"Вас добавили в список доступа к чату. Приветствую, {message.from_user.first_name}!")
+        for admin_id in ADMIN_LIST:
+            if admin_id != message.from_user.id:
+                bot.send_message(admin_id, f"Пользователь {message.from_user.first_name} с ID {message.from_user.id} добавлен в список доступа.")
+    else:
+        bot.send_message(message.chat.id, "Вам не добавлен в список доступа к чату.")
+
+@bot.message_handler(commands=['random'])
+def random(message):
+    user_id = str(message.from_user.id)
+    todos = load_todos()
+    if user_id in todos:
+        task = choice(RANDOM_TASKS)
+        add_todo(user_id, 'сегодня', task)
+        bot.send_message(message.from_user.id, f'Задача "{task}" добавлена на сегодня')
+        reset_state(message)
+
+@bot.message_handler(commands=['add'])
+def add(message):
+    user_id = str(message.from_user.id)
+    todos = load_todos()
+    if user_id in todos:
+        user_states[message.from_user.id] = {'date': None, 'state': 'add_date'}
+        bot.send_message(message.from_user.id, 'Введите дату в формате xx.xx.xx:')
+        bot.register_next_step_handler(message, add_date)
+    else:
+        bot.send_message(message.from_user.id, 'No such id in list')
+
+def add_date(message):
+    user_id = str(message.from_user.id)
+    date = message.text
+    if is_valid_date_format(date):
+        user_states[user_id]['date'] = date
+        user_states[user_id]['state'] = 'add_task'
+        bot.send_message(user_id, 'Теперь введите задачу:')
+        bot.register_next_step_handler(message, add_task)
+    else:
+        bot.send_message(user_id, 'Некорректный формат даты. Пожалуйста, введите дату в формате xx.xx.xx:')
+        bot.register_next_step_handler(message, add_date)
+
+@bot.message_handler(func=lambda message: str(message.from_user.id) in user_states and user_states[str(message.from_user.id)].get('state') == 'add_task')
+def add_task(message):
+    user_id = str(message.from_user.id)
+    date = user_states[user_id]['date']
+    task = message.text
+    add_todo(user_id, date, task)
+    bot.send_message(user_id, f'Задача "{task}" добавлена на дату {date}')
+    reset_state(message)
+
+@bot.message_handler(commands=['show'])
+def show_tasks(message):
+    user_id = str(message.from_user.id)
+    todos = load_todos()
+    if user_id in todos:
+        set_state(user_id, 'show_date')
+        bot.send_message(user_id, 'Введите дату в формате xx.xx.xx для просмотра задач, или напишите "все" для просмотра всех задач.')
+        bot.register_next_step_handler(message, handle_date_or_all)
+    else:
+        bot.send_message(user_id, 'У вас нет задач.')
+
+def handle_date_or_all(message):
+    user_input = message.text.lower()
+    user_id = message.from_user.id
+    todos = load_todos()
+    if user_id not in user_states:
+        user_states[user_id] = {}
+    if user_input == 'все' or user_input == '.':
+        show_all_tasks(message, todos)
+        reset_state(user_id)
+    elif is_valid_date_format(user_input):
+        handle_date(message, user_input, todos)
+    elif user_input == 'сегодня':
+        handle_date(message, 'сегодня', todos)
+    elif user_input in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']:
+        month_number = get_month_number(user_input)
+        show_tasks_for_month(message, month_number, todos)
+    elif user_input in ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']:
+        month_number = user_input
+        show_tasks_for_month(message, month_number, todos)
+    else:
+        bot.send_message(user_id, 'Некорректный формат даты. Пожалуйста, введите дату в формате xx.xx.xx.')
+        bot.register_next_step_handler(message, handle_date_or_all)
+
+def handle_date(message, date, todos):
+    user_id = message.from_user.id
+    user_states[user_id]['date'] = date
+    tasks = todos.get(user_id, {}).get(date, [])
+    if tasks:
+        tasks_text = "\n".join(f"{i + 1}. [ ] {task}" for i, task in enumerate(tasks, start=1))
+        bot.send_message(message.chat.id, f'Задачи на {date}:\n{tasks_text}')
+    else:
+        bot.send_message(message.from_user.id, f'На {date} задач нет.')
+    user_states[user_id]['state'] = None
+
+def show_all_tasks(message, todos):
+    user_id = message.from_user.id
+    all_tasks_text = ""
+    for date, tasks in todos.get(user_id, {}).items():
+        all_tasks_text += f'Задачи на {date}:\n'
+        all_tasks_text += "\n".join(f"[ ] {task}" for task in tasks)
+        all_tasks_text += "\n\n"
+    if all_tasks_text:
+        bot.send_message(message.from_user.id, all_tasks_text)
+    else:
+        bot.send_message(message.from_user.id, "Задач пока нет.")
+
+def show_tasks_for_month(message, month_number, todos):
+    user_id = message.from_user.id
+    month_tasks = []
+    user_tasks = todos.get(user_id, {})
+    for date, tasks in user_tasks.items():
+        if date.split('.')[1] == month_number:
+            month_tasks.extend(tasks)
+    if month_tasks:
+        tasks_text = "\n".join(f"{i + 1}. [ ] {task}" for i, task in enumerate(month_tasks, start=1))
+        bot.send_message(user_id, f'Задачи за {get_month_name(month_number)}:\n{tasks_text}')
+    else:
+        bot.send_message(user_id, f'Задач за {get_month_name(month_number)} нет.')
+    user_states[user_id]['state'] = None
+
+def get_month_number(month_name):
+    months = {
+        'январь': '01',
+        'февраль': '02',
+        'март': '03',
+        'апрель': '04',
+        'май': '05',
+        'июнь': '06',
+        'июль': '07',
+        'август': '08',
+        'сентябрь': '09',
+        'октябрь': '10',
+        'ноябрь': '11',
+        'декабрь': '12'
+    }
+    return months.get(month_name, '')
+
+
+def get_month_name(month_number):
+    months = {
+        '01': 'январь',
+        '02': 'февраль',
+        '03': 'март',
+        '04': 'апрель',
+        '05': 'май',
+        '06': 'июнь',
+        '07': 'июль',
+        '08': 'август',
+        '09': 'сентябрь',
+        '10': 'октябрь',
+        '11': 'ноябрь',
+        '12': 'декабрь'
+    }
+    return months.get(month_number, '')
+
+@bot.message_handler(commands=['clear_tasks'])
+def handle_clear_tasks(message):
+    user_id = message.from_user.id
+    if user_id in ADMIN_LIST:
+        result = clear_tasks()
+        bot.reply_to(message, result)
+    else:
+        bot.reply_to(message, "У вас нет прав для выполнения этой команды.")
+
+@bot.message_handler(commands=['delete'])
+def delete_task(message):
+    bot.send_message(message.from_user.id, "Введите дату в формате xx.xx.xx, чтобы удалить задачи на эту дату:")
+    user_states[message.from_user.id] = {'date': None, 'state': 'delete_date'}
+
+@bot.message_handler(func=lambda message: user_states.get(message.from_user.id, {}).get('state') == 'delete_date')
+def handle_delete_date(message):
+    date = message.text
+    tasks = todos.get(date, [])
+    if tasks:
+        bot.send_message(message.from_user.id, f"Список задач на {date}:\n" + "\n".join(f"{i + 1}. {task}" for i, task in enumerate(tasks)))
+        bot.send_message(message.from_user.id, "Введите номер задачи, которую вы хотите удалить, или 0 чтобы удалить все задачи на эту дату:")
+        user_states[message.from_user.id]['state'] = 'delete_task'
+    else:
+        bot.send_message(message.from_user.id, f"На {date} задач нет. Попробуйте другую дату.")
+        user_states[message.from_user.id] = None
+
+@bot.message_handler(func=lambda message: user_states.get(message.from_user.id) == 'delete_task')
+def handle_delete_task(message):
+    date = message.text
+    if date == '0':
+        todos[user_states[message.from_user.id]] = []
+        bot.send_message(message.from_user.id, "Все задачи на данную дату удалены.")
+        reset_state(message)
+    else:
+        try:
+            task_number = int(date)
+            if task_number > 0 and task_number <= len(todos[user_states[message.from_user.id]]):
+                deleted_task = todos[user_states[message.from_user.id]].pop(task_number - 1)
+                bot.send_message(message.from_user.id, f"Задача \"{deleted_task}\" удалена.")
+            else:
+                bot.send_message(message.from_user.id, "Введите корректный номер задачи или 0 для удаления всех задач на эту дату.")
+        except ValueError:
+            bot.send_message(message.from_user.id, "Введите корректный номер задачи или 0 для удаления всех задач на эту дату.")
+    reset_state(message)
+
+@bot.message_handler(commands=['exitsave'])
+def exit_program(message):
+    save_on_exit(todos)
+    bot.send_message(message.from_user.id, 'Спасибо за использование! Задачи добавлены. До свидания!')
+    bot.stop_polling()
+
+def save_on_exit(todos):
+    save_todos(todos)
+    print("Задачи сохранены в файл")
+
+atexit.register(save_on_exit, todos)
