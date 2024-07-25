@@ -671,11 +671,11 @@ def handle_date_or_all(message, todos):
     elif user_input in ['сегодня', '0']:
         print("Пользователь хочет увидеть все свои задачи на сегодня")
         show_tasks_for_today(message, todos)
-    elif user_input in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']:
+    elif user_input in ru_months.items():
         month_number = get_month_number(user_input)
         print(f' Пользователь хочет увидеть все свои задачи на {month_number}')
         show_tasks_for_month(message, month_number, todos)
-    elif user_input in ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']:
+    elif user_input in [f'{number:02}' for number in ru_months.keys()]:
         month_number = user_input
         print(f' Пользователь хочет увидеть все свои задачи на {month_number}')
         show_tasks_for_month(message, month_number, todos)
@@ -852,41 +852,36 @@ def show_tasks_for_month(message, month_number, todos):
 
     reset_state(user_id)  # Сброс состояния пользователя
 
+
+ru_months = {
+    1: 'январь',
+    2: 'февраль',
+    3: 'март',
+    4: 'апрель',
+    5: 'май',
+    6: 'июнь',
+    7: 'июль',
+    8: 'август',
+    9: 'сентябрь',
+    10: 'октябрь',
+    11: 'ноябрь',
+    12: 'декабрь'
+}
+
+
 # Функция для получения номера месяца по его названию
-def get_month_number(month_name):
-    months = {
-        'январь': '01',
-        'февраль': '02',
-        'март': '03',
-        'апрель': '04',
-        'май': '05',
-        'июнь': '06',
-        'июль': '07',
-        'август': '08',
-        'сентябрь': '09',
-        'октябрь': '10',
-        'ноябрь': '11',
-        'декабрь': '12'
-    }
-    return months.get(month_name, '')
+def get_month_number(month_name: str) -> str:
+    for number, name in ru_months.items():
+        if name == month_name:
+            return f'{number:02}'
+
 
 # Функция для получения названия месяца по его номеру
-def get_month_name(month_number):
-    months = {
-        '01': 'январь',
-        '02': 'февраль',
-        '03': 'март',
-        '04': 'апрель',
-        '05': 'май',
-        '06': 'июнь',
-        '07': 'июль',
-        '08': 'август',
-        '09': 'сентябрь',
-        '10': 'октябрь',
-        '11': 'ноябрь',
-        '12': 'декабрь'
-    }
-    return months.get(month_number, '')
+def get_month_name(month_number: int | str) -> str:
+    month_number = int(month_number)
+    if month_number > 12 or month_number < 1:
+        raise ValueError('Номер месяца должен быть в диапазоне от 1 до 12')
+    return ru_months[int(month_number)]
 
 
 def handle_command(message):
