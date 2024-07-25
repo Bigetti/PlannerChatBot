@@ -1,3 +1,4 @@
+import os
 from random import choice
 import telebot
 import json
@@ -246,7 +247,12 @@ todos = load_todos()
 
 #------------------Инициализация бота--------------------------
 
-token = '6136409665:AAFB7w_7Rhmek-mlTAb_ssNWjh5vlMjmPbI'
+# токен лежит в файле .envrc, который не загружается в репозиторий
+# файл .envrc содержит одну строку:
+# export TELEGRAM_API_TOKEN="секретный_токен_бота"
+# и его нужно загрузить в окружение командой `source .envrc` перед запуском скрипта
+# или использовать python-dotenv, direnv итд
+token = os.getenv("TELEGRAM_API_TOKEN")
 
 bot = telebot.TeleBot(token)
 
